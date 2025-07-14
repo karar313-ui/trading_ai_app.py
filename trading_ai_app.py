@@ -12,17 +12,38 @@ uploaded_file = st.file_uploader("ارفع ملف CSV هنا", type="csv")
 
 if uploaded_file is not None:
     try:
-        # محاولة قراءة الملف بترميز آمن
-        df = pd.read_csv(uploaded_file, encoding='ISO-8859-1')
+        # اكتشاف ترميز الملف بشكل آمن
+        uploaded_file.seek(0)  # إعادة المؤشر إلى بداية الملف
+        raw_data = uploaded_file.read()
         
+        # تحديد الترميز المناسب تلقائيًا
+        from chardet import detect
+        result = detect(raw_data)
+        encoding = result['encoding']
+
+        # العودة إلى بداية الملف قبل القراءة
+        uploaded_file.seek(0)
+
+        # اختيار الفاصل بناءً على أول سطر
+        first_line = raw_data.decode(encoding).split('\n')[0]
+        if ';' in first_line and ',' not in first_line:
+            sep = ';'
+        elif '\t' in first_line:
+            sep = '\t'
+        else:
+            sep = ','
+
+        # قراءة الملف باستخدام الفاصل والترميز المكتشفين
+        df = pd.read_csv(uploaded_file, sep=sep, encoding=encoding, on_bad_lines='skip')
+
         # التأكد من وجود الأعمدة المطلوبة
         required_columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
         if not all(col in df.columns for col in required_columns):
-            st.error("❌ الملف لا يحتوي على الأعمدة المطلوبة: Date, Open, High, Low, Close, Volume")
+            st.error(f"❌ الملف لا يحتوي على الأعمدة المطلوبة: {required_columns}")
         else:
-            # تحويل التاريخ
+            # تحويل التاريخ وفرز البيانات
             df['Date'] = pd.to_datetime(df['Date'])
-            df = df.sort_values('Date')
+            df = df.sort_values('Date').reset_index(drop=True)
 
             st.success("✅ تم تحميل الملف بنجاح!")
             st.dataframe(df.tail())
